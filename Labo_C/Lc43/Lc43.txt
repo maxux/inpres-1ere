@@ -1,0 +1,28 @@
+struct chantier:
+  long NumChantier;
+  char NomChantiers[25];
+  char rue[50];
+  int CodePostal
+  char ville[45];
+  char MaitreOuvrage[30];
+  float Montant;
+  int duree;
+  char Gerant[3];
+  
+=> Fichier bidonné; Org. séquentielle logique
+
+PTO / PTL - 
+
+Fonctions:
+  - Ajout
+  - Listage de tout les chantier (index -> ordre décroissant du cout)
+  - idem dont cout ne dépasse un certain montant. (saisi)
+  
+Bonus:
+  - Suppression -> -1 num. chantier et modif index
+  
++ Occupation
+
+------------
+Note: Check Chantier (id already exists)
+  

@@ -1,0 +1,24 @@
+OK | - Struct
+   | 
+OK | -> Ajouter occupation
+OK |    -> Liste Ouvrier (recherche)
+OK |    -> Liste Chantier (recherche)
+   | 
+OK | -> Afficher occupation
+OK | -> Edit Suppressions (Cascade si le temps)
+   | 
+OK | <- Fonctions de recherche d'ouvrier/chantier by id
+OK | <- Occupation: .pst
+OK | -> Confirmation mais pas si chantier/ouvrier altéré
+   | 
+OK | <> 1 ouvrier chantier / jour
+   | 
+OK | WARNING: Add prenom tri ouvrier
+   | 
+OK | Input Hours
+OK | Occupation: date > engag.
+   |
+   | Fields: Canncel
+   | Fields: Up/Down - Shift TAB
+OK | Disallow Occupation if Chantier/Ouvrier empty
+   | Comment Functions

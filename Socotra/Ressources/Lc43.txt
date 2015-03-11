@@ -1,0 +1,14 @@
+OK | => Fichier bidonné; Org. séquentielle logique
+   | 
+OK | PTO / PTL - 
+   | 
+OK | Fonctions:
+OK |   - Ajout
+OK |   - Listage de tout les chantier (index -> ordre décroissant du cout)
+OK |   - idem dont cout ne dépasse un certain montant. (saisi)
+   |   
+OK | Bonus:
+OK |   - Suppression -> -1 num. chantier et modif index
+   |   
+OK | Note: Check Chantier (id already exists)
+  

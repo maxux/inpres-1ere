@@ -1,0 +1,430 @@
+#define _CRT_SECURE_NO_WARNINGS
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <time.h>
+#include "__tables.h"
+#include "fieldsmanager.h"
+#include "input.h"
+#include "dynlist.h"
+#include "postcodes.h"
+#include "misc.h"
+
+/*
+   Vérifie si un caractère est alphabétique légé
+   @args : un caractère
+   return: 1 si valide, 0 sinon
+*/
+short __is_alpha(char chr) {
+	short ret = 0;
+
+	if((chr >= 'A' && chr <= 'Z') || (chr >= 'a' && chr <= 'z') || chr == '-' || chr == ' ' || chr == 39 || chr == '.')
+		ret = 1;
+
+	return ret;
+}
+
+/*
+   Vérifie si un caractère est numérique
+   @args : un caractère
+   return: 1 si valide, 0 sinon
+*/
+short __is_num(char chr) {
+	short ret = 0;
+
+	if(chr >= '0' && chr <= '9')
+		ret = 1;
+
+	return ret;
+}
+
+/*
+   Vérifie si un caractère est alphabétique étendu (guillemet, parenthèses, virgule)
+   @args : un caractère
+   return: 1 si valide, 0 sinon
+*/
+short __is_extended(char chr) {
+	short ret = 0;
+
+	if(chr == '"' || chr == '(' || chr == ')' || chr == ',' || chr == '*')
+		ret = 1;
+
+	return ret;
+}
+
+/*
+   Vérifie si un caractère est alphabétique légé ou numérique (alpha numérique)
+   @args : un caractère
+   return: 1 si valide, 0 sinon
+*/
+short __is_alpha_num(char chr) {
+	short ret = 0;
+
+	if(__is_alpha(chr) || __is_num(chr))
+		ret = 1;
+
+	return ret;
+}
+
+/*
+   Vérifie si un caractère est alphabétique légé, numérique ou étendu (alpha numérique étendu)
+   @args : un caractère
+   return: 1 si valide, 0 sinon
+*/
+short __is_alpha_num_extended(char chr) {
+	short ret = 0;
+
+	if(__is_alpha_num(chr) || __is_extended(chr))
+		ret = 1;
+	
+	return ret;
+}
+
+/* Prépare l'affichage d'un champ                   */
+/* @args : le contenu du champs, la taille du champ */
+void PrintTextField(char *data, size_t len) {
+	SetColor(FIELD_FOREGROUND, FIELD_BACKGROUND);
+	printf("%-*s", len, data);
+	ResetColor();
+}
+
+/* Affiche un champs date pré-formaté */
+/* @args : la date a afficher         */
+void PrintDateField(date_t *date) {
+	SetColor(FIELD_FOREGROUND, FIELD_BACKGROUND);
+
+	if(date->day != 0)
+		printf("%02d/%02d/%04d", date->day, date->month, date->year);
+
+	else printf("  /  /    ");
+
+	ResetColor();
+}
+
+/*
+   Permet de changer la casse en majuscule d'une chaine
+   @args : (pointeur) chaine
+*/
+void Format_Upper(char *str) {
+	while(*str != '\0') {
+		*str = toupper(*str);
+		str++;
+	}
+}
+
+/*
+   Permet de changer la casse de manière à mettre chaque première lettre d'un mot en majuscule (y compris après un -)
+   @args : (pointeur) chaine
+*/
+void Format_Title(char *str) {
+	short i = 0;
+
+	while(*str != '\0') {
+		if(i == 0) {
+			*str = toupper(*str);
+
+		} else {
+			if(*str == '-' && *(str+1) != '\0') {
+				*(str+1) = toupper(*(str+1));
+				str++;
+
+			} else *str = tolower(*str);
+		}
+		
+		i++;
+		str++;
+	}
+}
+
+/* Affiche une erreur formaté */
+/* @args : le type d'erreur   */
+void Fields_ManageFail(char type) {
+	COORD This;
+
+	This = GetCursorPosition();
+	SetColor(C_FORE_RED, C_BACK_BLACK);
+
+	if(type == FIELD_FAIL_CLEAR)
+		printf("            ");
+	else
+		if(type == FIELD_FAIL_SHOW)
+			printf(" -> Invalide");
+	
+	SetColor(FIELD_FOREGROUND, FIELD_BACKGROUND);
+
+	ChangeCurPosition(This.X, This.Y);
+}
+
+/* Permet de sélectionner et executer la gestion d'un champ */
+/* @args : node                                             */
+char Fields_HandleField(field_node_t *field) {
+	char temp[256], retcode = 0;
+	void *output;
+	dynlist_node_t *listvalue;
+
+	output =  field->data;
+
+	switch(field->type) {
+		case FIELD_UPPER:
+			if(*(char*)output != '\0')
+				printf("%s", (char*) output);
+
+			retcode = HandleFieldInput_Text(field, FIELD_ACCEPT_ALPHANUM_EXT);
+			Format_Upper(field->data);
+			break;
+
+		case FIELD_TITLE:
+			/* Clearing line (for CODEP rewrite) */
+			printf("%-20s", " ");
+			ChangeCurPosition(field->start.X, field->start.Y);
+
+			if(*(char*)output != '\0') {
+				strncpy(temp, (char*)output, 255);
+				temp[255] = '\0';
+				w(temp);
+
+				printf("%s", temp);
+			}
+
+			retcode = HandleFieldInput_Text(field, FIELD_ACCEPT_ALPHANUM);
+			Format_Title(field->data);
+			break;
+
+		case FIELD_TEXT:
+			if(*(char*)output != '\0')
+				printf("%s", (char*) output);
+
+			retcode = HandleFieldInput_Text(field, FIELD_ACCEPT_ALPHANUM_EXT);
+			break;
+
+		case FIELD_CODEP:
+			if(*(int*)output > 0)
+				printf("%d", *(int*)output);
+
+			retcode = HandleFieldInput_Numeric(field, 1000, 9999);
+			listvalue = ZipCode_GetListFromCode(&zipc, *(int*) output);
+
+			if(listvalue->id != 0) {
+				field++;
+				output = field->data;
+				ZipCode_GrabName(&zipc, listvalue->id, (char*) output, field->length);
+			}
+			break;
+
+		case FIELD_INT:
+			if(*(int*)output > 0)
+				printf("%d", *(int*)output);
+
+			retcode = HandleFieldInput_Numeric(field, 1, 65535);
+			break;
+
+		case FIELD_FLOAT:
+			/* if(*(float*)output > 0)
+				printf("%f", *(float*)output); */
+
+			retcode = HandleFieldInput_Float(field, 0.0, 9999999.0);
+			break;
+
+		case FIELD_DATE:
+			if(((date_t*)(field->data))->day != 0)
+				printf("%02d/%02d/%02d", ((date_t*)(field->data))->day, ((date_t*)(field->data))->month, ((date_t*)(field->data))->year);
+
+			retcode = HandleFieldInput_Date(field);
+			break;
+
+		case FIELD_CUSTOM:
+			field->valide(field->data, field->extra_param, &field->length);
+			break;
+
+		case FIELD_HOURS:
+			retcode = HandleFieldInput_Hours(field);
+			break;
+	}
+
+	/* 1 = Up, 0 = Down */
+	/* if(retcode == KEYCODE_UP)
+		retcode = 1;
+	else
+		retcode = 0; */
+
+	return retcode;
+}
+
+/*
+   Génère et gère une liste de champ complet, leur affichage et leur assignation
+   @args : (pointeur) liste de champ
+*/
+void Fields_Process(field_t *fields) {
+	short i;               /* Counter          */
+	size_t maxtitle;       /* Max len of field */
+	field_node_t *prems;   /* First Field      */
+	field_node_t *node;
+	char tmpitoa[6];
+
+	/* Print Fields Names */
+	printf(" %s \n", fields->fieldname);
+
+	for(i = strlen(fields->fieldname) + 2; i > 0; i--)
+		printf("%c", _DOUBLE_BORDER_HORZ_LINE);
+
+	printf("\n\n");
+
+	/* Keep first field */
+	prems = fields->nodes;
+
+	/* Parsing Fields */
+	maxtitle = 0;
+	node = prems;
+
+	/* Preparing Max Length */
+	for(i = 0; i < fields->nbnodes; i++) {
+		if(strlen(node->name) > maxtitle)
+			maxtitle = strlen(node->name);
+		
+		node++;
+	}
+
+	/* Display Title and Fields */
+	node = prems;
+
+	for(i = 0; i < fields->nbnodes; i++) {
+		if(node->editable)
+			SetColor(FIELD_FOREGROUND, FIELD_BACKGROUND);
+		else
+			SetColor(C_FORE_DARKGREY, FIELD_BACKGROUND);
+
+		printf(" %-*s ", maxtitle, node->name);
+
+		ResetColor();
+		printf(" : ");
+
+		node->start = GetCursorPosition();
+
+		switch(node->type) {
+			case FIELD_TEXT:
+			case FIELD_TITLE:
+			case FIELD_UPPER:
+				PrintTextField(node->data, node->length);
+				break;
+
+			case FIELD_DATE:
+				PrintDateField(node->data);
+				break;
+
+			case FIELD_INT:
+			case FIELD_CODEP:
+				if(*(int*)node->data > 0)
+					__itoa(*(int*)node->data, tmpitoa);
+
+				else *tmpitoa = '\0';
+
+				PrintTextField(tmpitoa, 5);
+				break;
+
+			case FIELD_CUSTOM:
+				printf("%s", (char*)node->data);
+				break;
+		}
+
+		printf("\n");
+
+		node++;
+	}
+
+	node = prems;
+
+	/* For each field, Grab input */
+	i = 1;
+	while(i != fields->nbnodes + 1) {
+		if(node->editable) {
+			ChangeCurPosition(node->start.X, node->start.Y);
+			SetColor(FIELD_FOREGROUND, FIELD_BACKGROUND);
+			
+			if(Fields_HandleField(node) == 1) {
+				node--;
+				i--;
+			} else {
+				node++;
+				i++;
+			}
+
+			ResetColor();
+
+		} else node++;
+	}
+
+	printf("\n");
+}
+
+/* Ajoute un node pour un champs d'affichage                                 */
+/* @args : liste de champs, le nom du champs, (pointeur) donnée ciblée,
+           taille de l'entrée (0 = non déf.), type de champ, editable ou non */
+void Fields_AppendNode(field_t *field, char name[], void *pointer, size_t length, char type, short editable, FIELD_VALID valide, void *extra) {
+	field_node_t *node;
+	size_t len;
+
+	field->nbnodes++;
+	field->nodes = (field_node_t *) realloc(field->nodes, sizeof(field_node_t) * field->nbnodes);
+	if(field->nodes == NULL)
+		Exit_Fail();
+
+	node = field->nodes + field->nbnodes - 1;
+
+	len = strlen(name) + 1;
+	
+	node->name   = (char *) malloc(sizeof(char) * len);
+	if(node->name == NULL)
+		Exit_Fail();
+
+	strncpy(node->name, name, len);
+	w(node->name);	/* Charset Fix */
+
+	node->data     = pointer;
+	node->length   = length;
+	node->type     = type;
+	node->editable = editable;
+	
+	node->valide   = valide;
+	node->extra_param = extra;
+}
+
+/* Crée un champs d'entrée vide             */
+/* Return: l'adresse du conteneur de champs */
+field_t * Fields_Create(char *name) {
+	field_t *field;
+
+	field = (field_t *) malloc(sizeof(field_t));
+	if(field == NULL)
+		Exit_Fail();
+
+	strncpy(field->fieldname, name, sizeof(field->fieldname));
+	field->fieldname[sizeof(field->fieldname) - 1] = '\0';
+
+	w(field->fieldname);	/* Charset Fix */
+
+	field->nbnodes = 0;
+	field->nodes   = NULL;
+
+	return field;
+}
+
+/* Libère la mémoire utilisé par un conteneur de champs */
+/* @args : le conteneur                                 */
+void Fields_Free(field_t *field) {
+	field_node_t *node;
+
+	node = field->nodes + field->nbnodes - 1;
+
+	while(field->nbnodes-- > 0) {
+		if(node->name != NULL)
+			free(node->name);
+
+		node--;
+	}
+}
+
+short field_dummy(void *dummy1, void *dummy2, void *dummy3) {
+	return 1;
+}

@@ -1,0 +1,15 @@
+- Ajout: recherche sur le nom d'un ouvrier (dichotomique)
+  @args: adresse début index, nb element index, addr string recherché
+  return: position prem occurence cible.
+  -> Afficher cible ouvrier
+  ADD: Recherche suivante
+
+- Suppression (logique): num reg -> -1
+  Index: tasser (déplacer de -1 apd la case supprimé)
+
+- Modification d'une fiche ouvrier
+  - Saisir nom
+  - Recherche
+  (- multichoix)
+  - demande de modification
+  - Gestion index (modif nom -> index nom) (supp + tasser)

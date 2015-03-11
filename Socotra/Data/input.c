@@ -1,0 +1,408 @@
+#define _CRT_SECURE_NO_WARNINGS
+
+#include <stdio.h>
+#include <stdlib.h>
+#include "__tables.h"
+#include "fieldsmanager.h"
+#include "datemanager.h"
+#include "input.h"
+#include "misc.h"
+#ifdef WIN32
+	#include "Win32Console.h"
+#else
+	#include "UnixConsole.h"
+#endif
+
+/*
+   Récupère une chaine de caractère depuis un champ précis
+   @args : (pointeur) node, caractères acceptés (define FIELD_ACCEPT_)
+*/
+char HandleFieldInput_Text(field_node_t *field, char accept) {
+	char key, retcode = 0;
+	unsigned char current = 0;
+	char *output;
+	char failed = 0;
+
+	output = field->data;
+	
+	if(output[0] != '\0')
+		current = strlen(output);
+
+	while(current != FIELD_EOL) {
+		fflush(stdin);
+		key = _getch();
+
+		if(failed) {
+			Fields_ManageFail(FIELD_FAIL_CLEAR);
+			failed = 0;
+		}
+
+		/* Working on keycode */
+		if(key == KEYCODE_SPKEY) {
+			key = _getch();		/* Strip Special Keys */
+
+		} else {
+			if(key == KEYCODE_BACKSP) {
+				/* Back Space */
+				if(current > 0) {
+					ClearBackSpace(1);
+					current--;
+				}
+			} else {
+				if(key == KEYCODE_ENTER || key == KEYCODE_TAB) {
+					output[current] = '\0';
+
+					if(current > 0 && field->valide(output, field->extra_param, NULL)) {	/* Test de fonctions pointé */
+						current = FIELD_EOL;
+						retcode = key;
+					} else {
+						Fields_ManageFail(FIELD_FAIL_SHOW);
+						failed = 1;
+					}
+				} else {
+					if(current < (signed) field->length - 1) {
+						if((accept == FIELD_ACCEPT_ALPHA && __is_alpha(key)) || (accept == FIELD_ACCEPT_ALPHANUM && __is_alpha_num(key)) || (accept == FIELD_ACCEPT_ALPHANUM_EXT && __is_alpha_num_extended(key))) {
+							output[current] = key;
+
+							printf("%c", key);
+							current++;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return retcode;
+}
+
+/*
+   Récupère une chaine de caractère formaté pour une date: date_t
+   @args : (pointeur) node
+*/
+char HandleFieldInput_Date(field_node_t *field) {
+	char inpdate[] = "  /  /    ";
+	char key, failed = 0, retcode = 0;
+	unsigned char current = 0;
+	date_t *output;
+	date_t today;
+
+	if(((date_t*)(field->data))->day != 0) {
+		sprintf(inpdate, "%02d/%02d/%04d", ((date_t*)(field->data))->day, ((date_t*)(field->data))->month, ((date_t*)(field->data))->year);
+
+		current = 10;
+	}
+
+	while(current != FIELD_EOL) {
+		fflush(stdin);
+		key = _getch();
+
+		if(failed) {
+			Fields_ManageFail(FIELD_FAIL_CLEAR);
+			failed = 0;
+		}
+
+		/* Working on keycode */
+		if(key == KEYCODE_BACKSP) {
+			/* Back Space */
+			if(current > 0) {
+				if(current == 3 || current == 6) {	/* One char after '/' */
+					ClearBackSpaceDate();
+					current--;
+
+				} else ClearBackSpace(1);
+				current--;
+			}
+		} else {
+			if(key == KEYCODE_ENTER || key == KEYCODE_TAB) {
+				if(current == 10) { /* Date Full */
+					output = field->data;
+					output->day   = atoi(inpdate);
+					output->month = atoi(inpdate+3);
+					output->year  = atoi(inpdate+6);
+
+					/* Grabbing current date */
+					today = Date_GetToday();
+
+					if(Date_Validate(output->day, output->month, output->year)) {
+						if(field->valide(output, field->extra_param, NULL)) {
+							current = FIELD_EOL;
+							retcode = key;
+						} else {
+							Fields_ManageFail(FIELD_FAIL_SHOW);
+							failed = 1;
+						}
+					} else {
+						Fields_ManageFail(FIELD_FAIL_SHOW);
+						failed = 1;
+					}
+				}
+			} else {
+				if(__is_num(key) && current < 10) {
+					inpdate[current] = key;
+
+					printf("%c", key);
+					current++;
+
+					if(current == 2 || current == 5) {
+						printf("/");
+						current++;
+					}
+				}
+			}
+		}
+	}
+
+	return retcode;
+}
+
+/*
+   Récupère un entier depuis un champ précis
+   @args : (pointeur) node, valeur min et max
+*/
+char HandleFieldInput_Numeric(field_node_t *field, int min, int max) {
+	char key, temp[11], retcode = 0;
+	unsigned char current = 0;
+	int *output;
+	char failed = 0;
+
+	output = field->data;
+
+	if(*(int*) output > 0) {
+		__itoa(*(int*) output, temp);
+		current += strlen(temp);
+	}
+
+	while(current != FIELD_EOL) {
+		fflush(stdin);
+		key = _getch();
+
+		if(failed) {
+			Fields_ManageFail(FIELD_FAIL_CLEAR);
+			failed = 0;
+		}
+
+		/* Working on keycode */
+		if(key == KEYCODE_BACKSP) {
+			/* Back Space */
+			if(current > 0) {
+				ClearBackSpace(1);
+				current--;
+			}
+		} else {
+			if(key == KEYCODE_ENTER || key == KEYCODE_TAB) {
+				temp[current] = '\0';
+
+				if(current > 0 && field->valide(temp, field->extra_param, NULL)) {
+					*output = atoi(temp);
+
+					if(*output >= min && *output <= max) {
+						current = FIELD_EOL;
+						retcode = key;
+					} else {
+						Fields_ManageFail(FIELD_FAIL_SHOW);
+						failed = 1;
+					}
+				} else {
+					Fields_ManageFail(FIELD_FAIL_SHOW);
+					failed = 1;
+				}
+			} else {
+				if(current < 10) {
+					if(__is_num(key)) {
+						temp[current] = key;
+
+						printf("%c", key);
+						current++;
+					}
+				}
+			}
+		}
+	}
+	
+	return retcode;
+}
+
+/*
+   Récupère un entier flottant depuis un champ précis
+   @args : (pointeur) node, valeur min et max
+*/
+char HandleFieldInput_Float(field_node_t *field, float min, float max) {
+	char key, temp[11], retcode = 0;
+	unsigned char current = 0;
+	float *output;
+	short failed = 0;
+	short dot = 0;
+
+	output = field->data;
+
+	while(current != FIELD_EOL) {
+		fflush(stdin);
+		key = _getch();
+
+		if(failed) {
+			Fields_ManageFail(FIELD_FAIL_CLEAR);
+			failed = 0;
+		}
+
+		/* Working on keycode */
+		if(key == KEYCODE_BACKSP) {
+			/* Back Space */
+			if(current > 0) {
+				if(temp[current-1] == '.')
+					dot = 0;
+
+				ClearBackSpace(1);
+				current--;
+			}
+		} else {
+			if(key == KEYCODE_ENTER || key == KEYCODE_TAB) {
+				temp[current] = '\0';
+
+				if(current > 0 && field->valide(temp, field->extra_param, NULL)) {
+					*output = (float) atof(temp);
+
+					if(*output >= min && *output <= max) {
+						current = FIELD_EOL;
+						retcode = key;
+					} else {
+						Fields_ManageFail(FIELD_FAIL_SHOW);
+						failed = 1;
+					}
+				} else {
+					Fields_ManageFail(FIELD_FAIL_SHOW);
+					failed = 1;
+				}
+			} else {
+				if(current < 10) {
+					if(__is_num(key) || (dot == 0 && current > 0 && (key == ',' || key == '.'))) {
+						if(key == ',')
+							key = '.';
+
+						if(key == '.')
+							dot = 1;
+
+						temp[current] = key;
+
+						printf("%c", key);
+						current++;
+					}
+				}
+			}
+		}
+	}
+
+	return retcode;
+}
+
+/* Récupère une demande d'heure utilisateur (format xx:xx) */
+/* @args: pointeur vers le champs */
+char HandleFieldInput_Hours(field_node_t *field) {
+	char key, *output, retcode = 0;
+	unsigned char current = 0;
+	short failed = 0;
+	short separe = 0;
+	int tmp;
+
+	output = field->data;
+
+	if(output[0] != '\0')
+		current = strlen(output);
+
+	while(current != FIELD_EOL) {
+		fflush(stdin);
+		key = _getch();
+
+		if(failed) {
+			Fields_ManageFail(FIELD_FAIL_CLEAR);
+			failed = 0;
+		}
+
+		/* Working on keycode */
+		if(key == KEYCODE_BACKSP) {
+			/* Back Space */
+			if(current > 0) {
+				if(output[current-1] == ':')
+					separe = 0;
+
+				ClearBackSpace(1);
+				current--;
+			}
+		} else {
+			if(key == KEYCODE_ENTER || key == KEYCODE_TAB) {
+				output[current] = '\0';
+
+				if(current == 5 && output[2] == ':' && field->valide(output, field->extra_param, NULL)) {
+					tmp = atoi(output);
+
+					if(tmp < 24 && tmp > 0) {
+						tmp = atoi(output+3);
+
+						if(tmp < 60 && tmp > -1) {
+							current = FIELD_EOL;
+							retcode = key;
+
+						} else {
+							Fields_ManageFail(FIELD_FAIL_SHOW);
+							failed = 1;
+						}
+					} else {
+						Fields_ManageFail(FIELD_FAIL_SHOW);
+						failed = 1;
+					}
+				} else {
+					Fields_ManageFail(FIELD_FAIL_SHOW);
+					failed = 1;
+				}
+			} else {
+				if(current < 5) {
+					if(__is_num(key) || (separe== 0 && current > 0 && key == ':')) {
+						if(key == ':')
+							separe = 1;
+
+						output[current] = key;
+
+						printf("%c", key);
+						current++;
+					}
+				}
+			}
+		}
+	}
+
+	return retcode;
+}
+
+/* From Wikipedia: http://en.wikipedia.org/wiki/Itoa */
+/* reverse:  reverse string s in place */
+void reverse(char s[]) {
+	int i, j;
+	char c;
+
+	for (i = 0, j = strlen(s) - 1; i < j; i++, j--) {
+		c = s[i];
+		s[i] = s[j];
+		s[j] = c;
+	}
+}
+
+
+/* itoa:  convert n to characters in s */
+void __itoa(int n, char s[]) {
+	int i, sign;
+
+	if ((sign = n) < 0)  /* record sign */
+		n = -n;          /* make n positive */
+
+	i = 0;
+	do {       /* generate digits in reverse order */
+		s[i++] = n % 10 + '0';   /* get next digit */
+
+	} while ((n /= 10) > 0);     /* delete it */
+
+	if (sign < 0)
+		s[i++] = '-';
+
+	s[i] = '\0';
+	reverse(s);
+}
